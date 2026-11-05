@@ -4,8 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BIOGLOW FLL Robot Simulator</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;700&family=Fira+Mono:wght@400;500&family=Roboto+Slab:wght@500;700&display=swap">
+  <link rel="stylesheet" href="vendor/fonts/fonts.css">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <script>
@@ -282,7 +281,8 @@
         <div class="row"><span>Height<small>The equipment inspection allows 30.5 cm</small></span><span class="row-end"><input type="number" id="bHeight" step="1"> cm</span></div>
         <div class="row"><span>Weight<small>Heavier robots grip better but speed up more slowly</small></span><span class="row-end"><input type="number" id="bMass" step="0.05"> kg</span></div>
         <div class="row"><span id="bSensorName">Color sensor<small>Ahead of the wheels (negative = behind) and to the right of the middle</small></span><span class="row-end"><input type="number" id="bSensorAhead" step="0.8"> cm ahead, <input type="number" id="bSensorSide" step="0.8"> cm right</span></div>
-        <div class="row"><span>Attachment<small id="bAttachAbout"></small></span><select id="bAttach"></select></div>
+        <div class="row"><span>Front attachment<small id="bAttachAbout"></small></span><select id="bAttach"></select></div>
+        <div class="row"><span>Back attachment<small id="bBackAbout"></small></span><select id="bBack"></select></div>
         <div class="row"><span>Standard robot<small>The SPIKE Prime driving base with the basket</small></span><button id="bDefault">Use standard robot</button></div>
       </div>
       <h2 class="group-title">Robot from photos</h2>
@@ -352,7 +352,7 @@
         </div>
         <div class="boxed-list">
           <div class="row"><span>Length<small>From the end at the robot to the far end <span id="amHoles"></span></small></span><span class="row-end"><input type="number" id="amLen" min="2" max="40" step="0.4" placeholder="cm"> cm</span></div>
-          <div class="row"><span>Fitted<small id="amMountWhy"></small></span><select id="amMount"><option value="arm">Swings on motor C</option><option value="spare">Swings on motor D</option><option value="fixed">Fixed to the front</option></select></div>
+          <div class="row"><span>Fitted<small id="amMountWhy"></small></span><select id="amMount"><option value="arm">Swings on motor C</option><option value="spare">Swings on motor D</option><option value="fixed">Fixed (doesn’t move)</option></select></div>
           <div class="row"><span>Axle<small id="amAxle"></small></span></div>
           <div class="row"><span>Which way lifts it<small>Try it on the real robot: run the motor a little and watch</small></span><select id="amDir"><option value="1">Motor &#x21bb; (clockwise) lifts it</option><option value="-1">Motor &#x21ba; (anticlockwise) lifts it</option></select></div>
           <div class="row"><span>How it sits at the start<small>Turned from the photo by this much; Auto keeps it just off the mat</small></span><span class="row-end"><input type="range" id="amStart" min="-90" max="90" value="0"> <label><input type="checkbox" id="amAuto" checked> Auto</label></span></div>
@@ -502,12 +502,17 @@ robot.holding()  robot.log(...)</pre>
 
       <details>
         <summary>Attachments from photos</summary>
+        <p><b>School laptops:</b> the simulator runs entirely from bioglow.app. If the network blocks the other websites it uses (school filters often do),
+          it turns those parts off by itself and says so: Sync and Chat, and links to blocked websites. They come back on a network that allows them.</p>
+        <p><b>Front and back attachments:</b> under <b>Build your robot</b>, pick a <b>Front attachment</b> (on motor C) and a <b>Back attachment</b>
+          (on motor D): a flat pusher for pushing while reversing, or one of your attachments made from photos. On a photo attachment, <b>Fit front</b>
+          and <b>Fit back</b> choose where it goes. A back attachment counts towards the robot's size, so the robot still has to fit in the launch area.</p>
         <p>On the Robot tab, <b>Make an attachment from photos</b> turns an attachment you have built into one the simulator can use. Put it on plain,
           light paper and take two photos, one from the side and one from straight above, with the end that sticks out away from the robot on the
           right (<b>Flip</b> and <b>Rotate</b> fix it if not). Keep some paper showing all round it. Move the <b>Cut-out</b> slider until only the attachment
           is bright, and use <b>Tap background</b> for shadows that stay bright.</p>
         <p>Type in how long it is (count the holes: each is 0.8 cm). The simulator fits it to the attachment motor, with the axle in the hole nearest the
-          robot if it can see one; tap the side photo to move the axle, or choose <b>Fixed to the front</b>. <b>Try the motor</b> shows how it swings.
+          robot if it can see one; tap the side photo to move the axle, or choose <b>Fixed</b>. <b>Try the motor</b> shows how it swings.
           After saving, your program moves it by turning that motor (for example motor C), just as on the real robot. It bumps into things and can lift
           handles. The 3D shape is built from the two outlines, so curves and holes that only show from the front are filled in.</p>
       </details>
@@ -539,24 +544,24 @@ robot.holding()  robot.log(...)</pre>
     </section>
   </main>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/RoundedBoxGeometry.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/FXAAShader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/math/SimplexNoise.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/SSAOShader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/SSAOPass.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/BokehShader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/BokehPass.js"></script>
-  <script src="https://unpkg.com/blockly@10.4.3/blockly.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="vendor/three/three.min.js"></script>
+  <script src="vendor/three/OrbitControls.js"></script>
+  <script src="vendor/three/RoomEnvironment.js"></script>
+  <script src="vendor/three/RoundedBoxGeometry.js"></script>
+  <script src="vendor/three/CopyShader.js"></script>
+  <script src="vendor/three/FXAAShader.js"></script>
+  <script src="vendor/three/LuminosityHighPassShader.js"></script>
+  <script src="vendor/three/EffectComposer.js"></script>
+  <script src="vendor/three/RenderPass.js"></script>
+  <script src="vendor/three/ShaderPass.js"></script>
+  <script src="vendor/three/UnrealBloomPass.js"></script>
+  <script src="vendor/three/SimplexNoise.js"></script>
+  <script src="vendor/three/SSAOShader.js"></script>
+  <script src="vendor/three/SSAOPass.js"></script>
+  <script src="vendor/three/BokehShader.js"></script>
+  <script src="vendor/three/BokehPass.js"></script>
+  <script src="vendor/blockly/blockly.min.js"></script>
+  <script src="vendor/jszip.min.js"></script>
   <script src="vendor/planck.min.js"></script>
   <script src="mat-art.js"></script>
   <script src="model-outlines.js"></script>
@@ -565,11 +570,12 @@ robot.holding()  robot.log(...)</pre>
   <script src="attachment-maker.js"></script>
   <script src="blocks.js"></script>
   <script src="spike-file.js"></script>
-  <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+  <script src="vendor/mqtt.min.js"></script>
   <script src="sync.js"></script>
   <script src="realhub.js"></script>
   <script>if (/[?&]mockhub\b/.test(location.search)) document.write('<script src="tools/mock-hub.js"><\/script>');</script>
   <script src="realrobot.js"></script>
   <script src="app.js"></script>
+  <script src="netcheck.js"></script>
 </body>
 </html>

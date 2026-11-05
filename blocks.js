@@ -537,7 +537,7 @@
     };
     const theme = themeFor(look);
     const ws = Blockly.inject(el, {
-      toolbox: TOOLBOX, renderer: 'zelos', theme, trashcan: true, sounds: false,
+      toolbox: TOOLBOX, renderer: 'zelos', theme, trashcan: true, sounds: false, media: 'vendor/blockly/media/', // icons from this site, not Blockly's
       zoom: { controls: true, wheel: true, startScale: 0.65, maxScale: 2, minScale: 0.3 },
       grid: { spacing: 24, length: 2, colour: '#dde3e8', snap: true },
       move: { scrollbars: true, drag: true, wheel: false },

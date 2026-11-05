@@ -238,9 +238,11 @@
     }
     window.addEventListener('pagehide', () => { if (client && room) client.publish(room.presence, room.bye); });
 
+    window.BioGlowSync.stop = () => leave(false); // used when the network blocks the relay (netcheck.js); the code is kept
     render();
     const saved = store.get('bioglow-sync-code');
-    if (saved && /^\d{4,8}$/.test(saved)) join(saved); // (only once a team password is saved)
+    const relayBlocked = window.BioGlowNet && window.BioGlowNet.relay === false; // netcheck.js already found it blocked
+    if (saved && /^\d{4,8}$/.test(saved) && !relayBlocked) join(saved); // (only once a team password is saved)
   }
 
   // ---- chat --------------------------------------------------------------------------------------
@@ -425,7 +427,7 @@
     };
   }
 
-  window.BioGlowSync = { attach };
+  window.BioGlowSync = { attach, BROKER };
 
   // The chat starts by itself, so the Chat tab works even when Sync or the block editor doesn't.
   setUpChat({

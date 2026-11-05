@@ -309,8 +309,8 @@
       const motor = ports.includes('arm') ? 'arm' : ports.includes('spare') ? 'spare' : 'fixed';
       if (!ks || !kt) return { mount: motor, why: '' };
       const tall = (photos.side.a.bbox.y1 - photos.side.a.bbox.y0 + 1) / ks, wide = (photos.top.a.bbox.y1 - photos.top.a.bbox.y0 + 1) / kt;
-      if (wide >= 0.6 * B.ROBOT.width && tall <= 6) return { mount: 'fixed', why: 'It is wide and low like a pusher, so it is fixed to the front.' };
-      if (motor === 'fixed') return { mount: 'fixed', why: 'This robot has no attachment motor plugged in, so it is fixed to the front.' };
+      if (wide >= 0.6 * B.ROBOT.width && tall <= 6) return { mount: 'fixed', why: 'It is wide and low like a pusher, so it is fixed (it doesn\u2019t move).' };
+      if (motor === 'fixed') return { mount: 'fixed', why: 'This robot has no attachment motor plugged in, so it is fixed (it doesn\u2019t move).' };
       return { mount: motor, why: 'It swings on motor ' + (motor === 'arm' ? 'C' : 'D') + ', the ' + (motor === 'arm' ? 'attachment' : 'spare') + ' motor.' };
     }
 

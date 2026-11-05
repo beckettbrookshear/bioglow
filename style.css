@@ -363,3 +363,7 @@ button.icon.labelled { width: auto; padding: 0 12px; display: inline-flex; align
 .links-pop a:hover, .links-help a:hover { text-decoration: underline; }
 .links-pop small, .links-help small { color: var(--dim); font-size: 13px; }
 @media (max-width: 700px) { .links-menu > summary span { display: none; } }
+
+/* ---- Network check (netcheck.js): what this network blocks is turned off ---- */
+body.net-no-relay #sync, body.net-no-relay #tabs [data-tab=chat], body.net-no-relay .pane-chat { display: none !important; }
+.net-note { color: var(--dim); font-size: 13px; margin: 6px 0; }

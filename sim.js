@@ -57,7 +57,15 @@
     hook: { reach: 12, mass: 0.03, label: 'Hook arm', about: 'One arm in the middle with a hook on motor C: closing it hooks the piece at the tip (leaves, the vine, the support tie, the cable anchor).' },
     pusher: { reach: 2, mass: 0.05, label: 'Flat pusher', about: 'A bumper across the whole front for pushing mission models. It cannot pick anything up.' },
     lifter: { reach: 10, mass: 0.04, label: 'Lift arm', about: 'A two-pronged fork on motor C, resting just above the mat: drive its prongs under a handle, then turn motor C \u21bb to lift it (M09, M12, M15).' },
+    none: { reach: 0, mass: 0, label: 'None', about: 'Nothing on the front of the robot.' },
   };
+  // Back attachments, on motor D: nothing, a flat pusher, or an attachment made from photos (by its id).
+  // `reach` is how far it sticks out behind the robot.
+  const BACK_ATTACHMENTS = {
+    none: { reach: 0, label: 'None', about: 'Nothing on the back of the robot.' },
+    pusher: { reach: 2, label: 'Flat pusher', about: 'A bumper across the whole back for pushing mission models while reversing. It doesn\u2019t move.' },
+  };
+  const backOptionOk = (id, front) => !!BACK_ATTACHMENTS[id] || (!!ATTACHMENTS[id] && !!ATTACHMENTS[id].custom && id !== front);
   // Attachments made from photos (Robot tab) are added here by registerAttachment(); see customSwing().
   let attachmentRev = 0;
   function registerAttachment(def) {
@@ -67,7 +75,7 @@
     ATTACHMENTS[id] = {
       rev: ++attachmentRev, // a changed attachment rebuilds the robot (see buildKey)
       reach: 0, mass: clamp(vox.count * def.cell ** 3 * 0.00035, 0.01, 0.3), label: def.name || 'My attachment', custom: def,
-      about: (def.mount === 'fixed' ? 'Made from your photos, fixed to the front of the robot.' : 'Made from your photos, turned by motor ' + (def.mount === 'spare' ? 'D' : 'C') + '.') + ' It pushes what it hits and lifts handles it is under.',
+      about: (def.mount === 'fixed' ? 'Made from your photos, fixed to the robot.' : 'Made from your photos, turned by ' + (def.mount === 'spare' ? 'motor D, on the front or the back.' : 'motor C on the front, or motor D on the back.')) + ' It pushes what it hits and lifts handles it is under.',
     };
     return ATTACHMENTS[id];
   }
@@ -132,7 +140,7 @@
     }
     return out;
   }
-  const BUILD_DEFAULT = { model: 'custom', look: false, wheel: 56, motor: 'medium', track: 11.2, length: 18, width: 14, height: 11, mass: 0.95, sensorAhead: 8, sensorSide: 0, attachment: 'basket', ports: WIRING_DEFAULT };
+  const BUILD_DEFAULT = { model: 'custom', look: false, wheel: 56, motor: 'medium', track: 11.2, length: 18, width: 14, height: 11, mass: 0.95, sensorAhead: 8, sensorSide: 0, attachment: 'basket', back: 'none', ports: WIRING_DEFAULT };
   const BUILD_LIMITS = { track: [8, 18], length: [12, 28], width: [10, 22], height: [6, 40], mass: [0.5, 1.6], sensorAhead: [-6, 14], sensorSide: [-6, 6] };
   // Keeps a build within what can be assembled from the kit (the wheels have to fit beside the body).
   function normalizeBuild(b) {
@@ -147,6 +155,10 @@
     if (!WHEELS[out.wheel]) out.wheel = BUILD_DEFAULT.wheel;
     if (!MOTORS[out.motor]) out.motor = BUILD_DEFAULT.motor;
     if (!ATTACHMENTS[out.attachment]) out.attachment = BUILD_DEFAULT.attachment;
+    // builds saved before there was a back slot: a photo attachment on motor D was fitted to the back
+    const front = ATTACHMENTS[out.attachment];
+    if ((!b || b.back === undefined) && front.custom && front.custom.mount === 'spare') { out.back = out.attachment; out.attachment = 'none'; }
+    if (!backOptionOk(out.back, out.attachment)) out.back = BUILD_DEFAULT.back;
     for (const [k, [lo, hi]] of Object.entries(BUILD_LIMITS)) out[k] = clamp(Number(out[k]) || BUILD_DEFAULT[k], lo, hi);
     out.track = Math.min(out.track, out.width - 1);
     out.sensorAhead = Math.min(out.sensorAhead, out.length / 2 + 1);
@@ -166,7 +178,7 @@
     }
     return used.has('left') && used.has('right') ? out : { ...WIRING_DEFAULT };
   }
-  const buildKeyOf = (b) => JSON.stringify(b) + (ATTACHMENTS[b.attachment].rev || '') + (b.look && robotLook ? ':' + robotLook.rev : '');
+  const buildKeyOf = (b) => JSON.stringify(b) + (ATTACHMENTS[b.attachment].rev || '') + ':' + ((ATTACHMENTS[b.back] || {}).rev || '') + (b.look && robotLook ? ':' + robotLook.rev : '');
   function applyBuild(b) {
     const w = WHEELS[b.wheel], m = MOTORS[b.motor], a = ATTACHMENTS[b.attachment];
     Object.assign(WHEEL, { diameter: w.diameter, width: w.width, maxDegPerSec: m.maxDegPerSec });
@@ -186,6 +198,15 @@
       const pts = swingPoints(ROBOT.swing, ROBOT.swing.shape, ROBOT.swing.angle(0));
       if (a.custom) ROBOT.basket = Math.max(0, Math.max(...pts.map((p) => p[0])) - b.length / 2);
       ROBOT.attachTop = Math.max(...pts.map((p) => p[2]));
+    }
+    // the back attachment: a fixed pusher, or a photo attachment on motor D (or fixed, if it was made that way)
+    ROBOT.back = b.back;
+    ROBOT.backSwing = ATTACHMENTS[b.back] && ATTACHMENTS[b.back].custom ? customSwing(ATTACHMENTS[b.back].custom, true) : null;
+    ROBOT.backReach = BACK_ATTACHMENTS[b.back] ? BACK_ATTACHMENTS[b.back].reach : 0;
+    if (ROBOT.backSwing) {
+      const pts = swingPoints(ROBOT.backSwing, ROBOT.backSwing.shape, ROBOT.backSwing.angle(0));
+      ROBOT.backReach = Math.max(0, -Math.min(...pts.map((p) => p[0])) - b.length / 2);
+      ROBOT.attachTop = Math.max(ROBOT.attachTop, ...pts.map((p) => p[2]));
     }
     for (const port of HUB_PORTS) PORTS[port] = JOBS[b.ports[port]] ? JOBS[b.ports[port]].label : 'nothing';
     PHYS.robotMass = b.mass;
@@ -515,6 +536,7 @@
   // Attachments that swing (ROBOT.swing.shape) have boxes that follow the motor instead (Sim.attBoxes).
   function attachmentBoxes() {
     const L = ROBOT.length / 2, W2 = ROBOT.width / 2, R = ROBOT.basket;
+    if (ROBOT.attachment === 'none') return [];
     if (ROBOT.attachment === 'pusher') return [{ u: L + R / 2, v: 0, du: R, dv: ROBOT.width }];
     if (ROBOT.attachment === 'hook') return [{ u: L + R / 2, v: 0, du: R, dv: 1.2 }];
     return [-1, 1].map((side) => ({ u: L + R / 2, v: side * (W2 - 0.4), du: R, dv: 0.8 }));
@@ -551,10 +573,15 @@
   }
 
   // Where each attachment motor's axle is on the robot that is built.
-  function mountSpot(job) {
+  // the back pusher's collision box (a back photo attachment has boxes that follow motor D: Sim.backBoxes)
+  function backBoxes() {
+    return ROBOT.back === 'pusher' ? [{ u: -ROBOT.length / 2 - ROBOT.backReach / 2, v: 0, du: ROBOT.backReach, dv: ROBOT.width }] : [];
+  }
+  // where an attachment's axle is: on the front of the robot, or (`back`) on the back
+  function mountSpot(back) {
     const L = ROBOT.length / 2;
-    if (ROBOT.model === 'adb') return job === 'spare' ? { u: -(L - 2.8), z: 4.4, back: true } : { u: L - 3.6, z: 4.0 };
-    return job === 'spare' ? { u: -(L - 2), z: 8.2, back: true } : { u: L - 2, z: 8.2 };
+    if (ROBOT.model === 'adb') return back ? { u: -(L - 2.8), z: 4.4, back: true } : { u: L - 3.6, z: 4.0 };
+    return back ? { u: -(L - 2), z: 8.2, back: true } : { u: L - 2, z: 8.2 };
   }
 
   function makeSwing(attachment) {
@@ -582,7 +609,7 @@
 
   // A photo attachment: on a motor, its axle (def.pivot) goes on that motor's axle; fixed ones are
   // bolted to the front with their back edge against the bumper and their lowest point just above the mat.
-  function customSwing(def) {
+  function customSwing(def, back) {
     const vox = attachmentVoxels(def, 2);
     const pts = vox.cells.map(vox.at);
     // only the outside matters for collisions and lifting
@@ -592,10 +619,11 @@
     let spot;
     if (fixed) {
       const minU = Math.min(...pts.map((p) => p[0])), minZ = Math.min(...pts.map((p) => p[2]));
-      spot = { u: ROBOT.length / 2 - 0.3 - minU, z: (def.lift !== undefined ? def.lift : 0.4) - minZ };
-    } else spot = mountSpot(def.mount);
+      spot = { u: (ROBOT.length / 2 - 0.3 - minU) * (back ? -1 : 1), z: (def.lift !== undefined ? def.lift : 0.4) - minZ, back: !!back };
+    } else spot = mountSpot(back);
     const k = (def.dir || 1) * (def.ratio || 1);
-    const sw = { job: fixed ? null : def.mount, spot, lifters: surface, shape: surface, custom: true, start: 0, angle: (pos) => sw.start + k * pos };
+    // on the front it is turned by the motor it was made for; on the back always by motor D
+    const sw = { job: fixed ? null : back ? 'spare' : def.mount, spot, lifters: surface, shape: surface, custom: true, start: 0, angle: (pos) => sw.start + k * pos };
     if (fixed) { sw.angle = () => 0; return sw; }
     // as fitted on the robot: turned from the photo by `start` degrees, or (by default) the least turn
     // that keeps it off the mat
@@ -952,10 +980,13 @@
       body.createFixture(planck.Box(L / 2, Wd / 2), { ...fix, density: (PHYS.robotMass * 0.94) / (L * Wd), filterCategoryBits: ROBOT_CATEGORY });
       this.body = body;
       this.attFix = []; this.attBoxes = null; this.attAngle = null;
+      this.backFix = []; this.backBoxes = null; this.backAngle = null;
       if (ROBOT.swing && ROBOT.swing.shape) this.updateAttachment(true); // its collision boxes follow its motor
       else for (const part of attachmentBoxes()) { // in robot coordinates: u forward, v to the right
         body.createFixture(planck.Box(part.du / 2, part.dv / 2, Vec2(part.u, part.v), 0), { ...fix, density: (PHYS.robotMass * 0.03) / (part.du * part.dv), filterCategoryBits: ROBOT_CATEGORY, filterMaskBits: 0xffff & ~HIGH_CATEGORY });
       }
+      if (ROBOT.backSwing) this.updateAttachment(true);
+      else for (const part of backBoxes()) body.createFixture(planck.Box(part.du / 2, part.dv / 2, Vec2(part.u, part.v), 0), { ...fix, density: 0, filterCategoryBits: ROBOT_CATEGORY, filterMaskBits: 0xffff & ~HIGH_CATEGORY });
 
       // loose mission models; the ones still on a model wait there (inactive) until they come loose
       const slots = {};
@@ -1333,7 +1364,9 @@
       const sw = ROBOT.swing;
       const [lo, hi] = sw && sw.range && sw.job === 'arm' ? sw.range : [ARM.min, ARM.max];
       if (r.armPos > hi || r.armPos < lo) { r.armPos = clamp(r.armPos, lo, hi); r.armVel = 0; }
-      if (sw && sw.range && sw.job === 'spare' && (r.sparePos > sw.range[1] || r.sparePos < sw.range[0])) { r.sparePos = clamp(r.sparePos, ...sw.range); r.spareVel = 0; }
+      for (const s2 of [sw, ROBOT.backSwing]) {
+        if (s2 && s2.range && s2.job === 'spare' && (r.sparePos > s2.range[1] || r.sparePos < s2.range[0])) { r.sparePos = clamp(r.sparePos, ...s2.range); r.spareVel = 0; }
+      }
       if (!['basket', 'hook', 'pusher'].includes(ROBOT.attachment)) return; // only these open and close
       const closed = r.armPos >= ARM.closeAt;
       if (closed && !this.basketClosed) this.doGrab();
@@ -1632,20 +1665,18 @@
       }
     }
 
-    // Position (degrees) of the motor that turns the attachment.
-    swingPos() {
-      const sw = ROBOT.swing;
+    // Position (degrees) of the motor that turns the front attachment (or the swing `sw`).
+    swingPos(sw = ROBOT.swing) {
       return !sw || !sw.job ? 0 : sw.job === 'spare' ? this.robot.sparePos : this.robot.armPos;
     }
 
     // The attachment's lifting points on the field now: [x, y, height] (cached for one physics step).
     liftPoints() {
       if (this.liftCache && this.liftCache.t === this.t) return this.liftCache.pts;
-      const sw = ROBOT.swing, r = this.robot;
+      const r = this.robot, fx = Math.sin(rad(r.h)), fy = -Math.cos(rad(r.h)), rx = Math.cos(rad(r.h)), ry = Math.sin(rad(r.h));
       let pts = [];
-      if (sw && sw.lifters) {
-        const fx = Math.sin(rad(r.h)), fy = -Math.cos(rad(r.h)), rx = Math.cos(rad(r.h)), ry = Math.sin(rad(r.h));
-        pts = swingPoints(sw, sw.lifters, sw.angle(this.swingPos())).map(([u, v, z]) => [r.x + fx * u + rx * v, r.y + fy * u + ry * v, z]);
+      for (const sw of [ROBOT.swing, ROBOT.backSwing]) { // front, then back: the order stays the same, so indices do too
+        if (sw && sw.lifters) pts = pts.concat(swingPoints(sw, sw.lifters, sw.angle(this.swingPos(sw))).map(([u, v, z]) => [r.x + fx * u + rx * v, r.y + fy * u + ry * v, z]));
       }
       this.liftCache = { t: this.t, pts };
       return pts;
@@ -1654,7 +1685,7 @@
     // A handle goes up with the attachment points that were under it and rise; pushing it does nothing.
     updateHandle(pl, tag) {
       const ps = pl.ps, r = this.robot;
-      if (pl.lifted >= pl.rise || Math.hypot(r.x - pl.cx, r.y - pl.cy) > ROBOT.length + ROBOT.basket + 12) { pl.under.clear(); return; }
+      if (pl.lifted >= pl.rise || Math.hypot(r.x - pl.cx, r.y - pl.cy) > ROBOT.length + Math.max(ROBOT.basket, ROBOT.backReach) + 12) { pl.under.clear(); return; }
       const pts = this.liftPoints();
       let top = -Infinity;
       for (const i of pl.under) if (pts[i] && pointInPoly(pts[i][0], pts[i][1], pl.poly)) top = Math.max(top, pts[i][2]);
@@ -1686,7 +1717,7 @@
     // side (not by going through the bar).
     updatePull(pl, tag) {
       const ps = pl.ps, r = this.robot, pd = pl.pad;
-      if (pl.s >= pl.travel || Math.hypot(r.x - pl.cx, r.y - pl.cy) > ROBOT.length + ROBOT.basket + 12) { pl.hooks.clear(); pl.front.clear(); return; }
+      if (pl.s >= pl.travel || Math.hypot(r.x - pl.cx, r.y - pl.cy) > ROBOT.length + Math.max(ROBOT.basket, ROBOT.backReach) + 12) { pl.hooks.clear(); pl.front.clear(); return; }
       const pts = this.liftPoints(), d = pd.out + pl.s, w2 = pl.w / 2 + 0.3;
       const zLo = pd.zb - pd.r - 1.5, zHi = pd.zb + pd.r + 0.2;
       const hooks = new Set(), front = new Set();
@@ -1724,27 +1755,30 @@
       }
     }
 
-    // Rebuilds a swinging attachment's collision boxes when its motor has turned it a little.
+    // Rebuilds the swinging attachments' collision boxes when their motor has turned them a little.
     updateAttachment(force) {
-      const sw = ROBOT.swing;
+      this.updateSwing('att', ROBOT.swing, force);
+      this.updateSwing('back', ROBOT.backSwing, force);
+    }
+    updateSwing(key, sw, force) {
       if (!sw || !sw.shape) return;
-      const ang = sw.angle(this.swingPos());
-      if (!force && Math.abs(ang - this.attAngle) < 2) return;
-      this.attAngle = ang;
-      for (const f of this.attFix) this.body.destroyFixture(f);
-      this.attBoxes = footprintOf(swingPoints(sw, sw.shape, ang));
+      const ang = sw.angle(this.swingPos(sw));
+      if (!force && Math.abs(ang - this[key + 'Angle']) < 2) return;
+      this[key + 'Angle'] = ang;
+      for (const f of this[key + 'Fix']) this.body.destroyFixture(f);
+      this[key + 'Boxes'] = footprintOf(swingPoints(sw, sw.shape, ang));
       // weightless (the chassis carries the robot's mass, so it doesn't change as the boxes do)
-      this.attFix = this.attBoxes.map((b) => this.body.createFixture(planck.Box(b.du / 2, b.dv / 2, Vec2(b.u, b.v), 0), {
+      this[key + 'Fix'] = this[key + 'Boxes'].map((b) => this.body.createFixture(planck.Box(b.du / 2, b.dv / 2, Vec2(b.u, b.v), 0), {
         friction: PHYS.bodyFriction, restitution: PHYS.restitution, density: 0,
         filterCategoryBits: b.high ? ROBOT_HIGH_CATEGORY : ROBOT_CATEGORY, filterMaskBits: b.high ? 0xffff : 0xffff & ~HIGH_CATEGORY,
       }));
     }
 
-    // The robot's chassis and its attachment's solid parts (a basket is open between its arms), grown by `grow` cm.
+    // The robot's chassis and its attachments' solid parts (a basket is open between its arms), grown by `grow` cm.
     robotParts(grow, pose) {
       const r = pose || this.robot, fx = Math.sin(rad(r.h)), fy = -Math.cos(rad(r.h)), rx = Math.cos(rad(r.h)), ry = Math.sin(rad(r.h));
       const g = grow || 0;
-      const boxes = (this.attBoxes || attachmentBoxes()).map((b) => [[b.u - b.du / 2, b.v - b.dv / 2 - g], [b.u + b.du / 2 + g, b.v - b.dv / 2 - g], [b.u + b.du / 2 + g, b.v + b.dv / 2 + g], [b.u - b.du / 2, b.v + b.dv / 2 + g]]
+      const boxes = (this.attBoxes || attachmentBoxes()).concat(this.backBoxes || backBoxes()).map((b) => [[b.u - b.du / 2, b.v - b.dv / 2 - g], [b.u + b.du / 2 + g, b.v - b.dv / 2 - g], [b.u + b.du / 2 + g, b.v + b.dv / 2 + g], [b.u - b.du / 2, b.v + b.dv / 2 + g]]
         .map(([u, v]) => [r.x + fx * u + rx * v, r.y + fy * u + ry * v]));
       return [robotPoly(r, g)].concat(boxes);
     }
@@ -1856,6 +1890,7 @@
       const rx = Math.cos(rad(r.h)), ry = Math.sin(rad(r.h));
       const L = ROBOT.length / 2, W2 = ROBOT.width / 2, R = ROBOT.basket;
       if (ROBOT.attachment === 'pusher') { this.log('The flat pusher cannot pick anything up'); return false; }
+      if (ROBOT.attachment === 'none') return false;
       const hookArm = ROBOT.attachment === 'hook';
       let n = 0;
       for (const it of this.items) {
@@ -2470,7 +2505,7 @@
   }
 
   const api = {
-    FIELD, ROBOT, PHYS, VARIATION, MAT, DRONE, DOCK_MODELS, ROBOT_MODELS, JOBS, HUB_PORTS, WIRING_DEFAULT, FAULTS_DEFAULT, FAULT_LIMITS, DT, MATCH_TIME, START, PORTS, ARM, HUB_IMAGES, SOUNDS, Sim,
+    FIELD, ROBOT, PHYS, BACK_ATTACHMENTS, VARIATION, MAT, DRONE, DOCK_MODELS, ROBOT_MODELS, JOBS, HUB_PORTS, WIRING_DEFAULT, FAULTS_DEFAULT, FAULT_LIMITS, DT, MATCH_TIME, START, PORTS, ARM, HUB_IMAGES, SOUNDS, Sim,
     WHEELS, MOTORS, ATTACHMENTS, BUILD_DEFAULT, BUILD_LIMITS, normalizeBuild, ACCEL_SETTINGS, TOKEN_POINTS, MAX_HEIGHT,
     robotPoly, grabAction, releaseAction, classifyRGB,
     registerAttachment, unregisterAttachment, setRobotLook, getRobotLook: () => robotLook, attachmentVoxels, swingPoints, mountSpot, swingOf: customSwing,

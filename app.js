@@ -391,7 +391,7 @@ robot.log('Done at', robot.time(), 's');
   };
 
   // ---- robot builder (Robot tab) -----------------------------------------------
-  const builderFields = { bModel: 'model', bWheel: 'wheel', bMotor: 'motor', bTrack: 'track', bLength: 'length', bWidth: 'width', bHeight: 'height', bMass: 'mass', bSensorAhead: 'sensorAhead', bSensorSide: 'sensorSide', bAttach: 'attachment' };
+  const builderFields = { bModel: 'model', bWheel: 'wheel', bMotor: 'motor', bTrack: 'track', bLength: 'length', bWidth: 'width', bHeight: 'height', bMass: 'mass', bSensorAhead: 'sensorAhead', bSensorSide: 'sensorSide', bAttach: 'attachment', bBack: 'back' };
   const fillSelect = (el, entries) => { el.innerHTML = ''; for (const [v, label] of entries) { const o = document.createElement('option'); o.value = v; o.textContent = label; el.appendChild(o); } };
   fillSelect($('bWheel'), Object.entries(WHEELS).map(([k, w]) => [k, w.label]));
   fillSelect($('bMotor'), Object.entries(MOTORS).map(([k, m]) => [k, m.label]));
@@ -401,7 +401,11 @@ robot.log('Done at', robot.time(), 's');
   // the robot made from photos is kept in this browser too (before the saved build is loaded, which may use it)
   let robotLook = null;
   try { robotLook = JSON.parse(store.get('bioglow-robot-look') || 'null'); if (robotLook && !window.BioGlow.setRobotLook(robotLook)) robotLook = null; } catch (e) { robotLook = null; }
-  function fillAttachments() { fillSelect($('bAttach'), Object.entries(ATTACHMENTS).map(([k, a]) => [k, a.label + (a.custom ? ' (from photos)' : '')])); }
+  function fillAttachments() {
+    fillSelect($('bAttach'), Object.entries(ATTACHMENTS).map(([k, a]) => [k, a.label + (a.custom ? ' (from photos)' : '')]));
+    const BACKS = window.BioGlow.BACK_ATTACHMENTS;
+    fillSelect($('bBack'), Object.entries(BACKS).map(([k, a]) => [k, a.label]).concat(Object.entries(ATTACHMENTS).filter(([, a]) => a.custom).map(([k, a]) => [k, a.label + ' (from photos)'])));
+  }
   fillAttachments();
   // the robot can be picked on the Robot tab, on Setup and beside the field; they all drive the Robot tab's menu
   for (const sel of document.querySelectorAll('#bModel, .model-pick')) fillSelect(sel, Object.entries(ROBOT_MODELS).map(([k, m]) => [k, m.label]));
@@ -409,8 +413,8 @@ robot.log('Done at', robot.time(), 's');
   // what each job does, for the Ports list
   const jobNotes = (b) => ({
     left: 'movement motor', right: 'movement motor',
-    arm: { basket: '\u21bb 90\u00b0 closes the basket gate, \u21ba opens it', hook: '\u21bb 90\u00b0 closes the hook, \u21ba lets go', pusher: 'not used by the pusher', lifter: '\u21bb lifts the fork (up to 75\u00b0), \u21ba lowers it' }[b.attachment] || swingNote(b, 'arm'),
-    spare: swingNote(b, 'spare') || 'nothing attached',
+    arm: { basket: '\u21bb 90\u00b0 closes the basket gate, \u21ba opens it', hook: '\u21bb 90\u00b0 closes the hook, \u21ba lets go', pusher: 'not used by the pusher', lifter: '\u21bb lifts the fork (up to 75\u00b0), \u21ba lowers it', none: 'nothing on the front' }[b.attachment] || swingNote(b, 'arm'),
+    spare: [swingNote(b, 'spare'), backNote(b)].filter(Boolean).join('; ') || 'nothing attached',
     color: 'looking down at the mat, ' + b.sensorAhead + ' cm ahead of the wheels',
     color2: 'looking down at the mat, beside the first one',
     distance: 'facing forward, 4\u2013200 cm, 20 readings a second',
@@ -422,6 +426,12 @@ robot.log('Done at', robot.time(), 's');
     if (a.custom.mount !== job) return job === 'arm' ? 'not used (' + a.label + (a.custom.mount === 'fixed' ? ' is fixed to the front)' : ' is on the spare motor)') : '';
     const up = (a.custom.dir || 1) > 0 ? '\u21bb' : '\u21ba';
     return up + ' lifts ' + a.label + (sw && sw.range ? ' (it can turn ' + Math.round(sw.range[0]) + '\u00b0 to ' + Math.round(sw.range[1]) + '\u00b0 before it hits the mat or the robot)' : '');
+  }
+  function backNote(b) { // a photo attachment on the back turns on motor D
+    const a = ATTACHMENTS[b.back], sw = ROBOT.backSwing;
+    if (!a || !a.custom || !sw || !sw.job) return '';
+    const up = (a.custom.dir || 1) > 0 ? '\u21bb' : '\u21ba';
+    return up + ' lifts ' + a.label + ' on the back' + (sw.range ? ' (it can turn ' + Math.round(sw.range[0]) + '\u00b0 to ' + Math.round(sw.range[1]) + '\u00b0)' : '');
   }
   const jobShort = { left: 'drive', right: 'drive', arm: 'attachment', spare: 'spare', color: 'color', color2: 'color', distance: 'distance' };
   function showPorts(b) {
@@ -464,13 +474,14 @@ robot.log('Done at', robot.time(), 's');
     const b = sim.build;
     for (const [id, key] of Object.entries(builderFields)) $(id).value = String(b[key]);
     $('bAttachAbout').textContent = ATTACHMENTS[b.attachment].about;
+    $('bBackAbout').textContent = (window.BioGlow.BACK_ATTACHMENTS[b.back] || ATTACHMENTS[b.back]).about;
     if (typeof showPhotoAttachments === 'function') showPhotoAttachments();
     if (typeof showRobotLook === 'function') showRobotLook();
     $('bModelAbout').textContent = ROBOT_MODELS[b.model].about;
     for (const sel of document.querySelectorAll('.model-pick')) sel.value = b.model;
     const fixed = !!ROBOT_MODELS[b.model].build;
     const choices = ROBOT_MODELS[b.model].choices || [];
-    for (const [id, key] of Object.entries(builderFields)) if (id !== 'bModel' && id !== 'bAttach') $(id).disabled = fixed && !choices.includes(key);
+    for (const [id, key] of Object.entries(builderFields)) if (id !== 'bModel' && id !== 'bAttach' && id !== 'bBack') $(id).disabled = fixed && !choices.includes(key);
     $('bSensorName').firstChild.textContent = ROBOT.color2 ? 'Color sensors' : 'Color sensor';
     showPorts(b);
     showFaults();
@@ -480,7 +491,7 @@ robot.log('Done at', robot.time(), 's');
       ['Top speed', 'speed 100%', 'about ' + Math.round(ROBOT.maxSpeed) + ' cm/s'],
       ['1 motor rotation', 'set this in your program: "set 1 motor rotation to ' + travel.toFixed(1) + ' cm"', travel.toFixed(1) + ' cm of travel'],
       ['Turning', 'motor degrees for a 90\u00b0 turn on the spot', Math.round((ROBOT.wheelBase / ROBOT.wheel.diameter) * 90) + '\u00b0'],
-      ['Size with attachment', 'length \u00d7 width \u00d7 height', (ROBOT.length + ROBOT.basket).toFixed(1) + ' \u00d7 ' + ROBOT.width.toFixed(1) + ' \u00d7 ' + ROBOT.height + ' cm'],
+      ['Size with attachments', 'length \u00d7 width \u00d7 height', (ROBOT.length + ROBOT.basket + ROBOT.backReach).toFixed(1) + ' \u00d7 ' + ROBOT.width.toFixed(1) + ' \u00d7 ' + ROBOT.height + ' cm'],
       ['Equipment inspection', 'fits in a launch area, under ' + MAX_HEIGHT + ' cm', insp.ok ? '\u2713 passes' : '\u2717 ' + insp.why],
     ];
     $('specs').innerHTML = '';
@@ -497,7 +508,7 @@ robot.log('Done at', robot.time(), 's');
   }
   function readBuild() {
     const b = {};
-    for (const [id, key] of Object.entries(builderFields)) b[key] = ['model', 'wheel', 'motor', 'attachment'].includes(key) ? $(id).value : Number($(id).value);
+    for (const [id, key] of Object.entries(builderFields)) b[key] = ['model', 'wheel', 'motor', 'attachment', 'back'].includes(key) ? $(id).value : Number($(id).value);
     b.wheel = Number(b.wheel);
     b.ports = sim.build.ports; // leaving an official robot, your own starts from its measurements and wiring
     b.look = b.model === sim.build.model && sim.build.look; // picking another robot shows that robot, not your photos
@@ -576,8 +587,8 @@ robot.log('Done at', robot.time(), 's');
     store.set('bioglow-attachments', JSON.stringify(photoAttachments.map((d) => ({ ...d, photos: undefined }))));
     print('There is no room left in this browser for the photos, so only the attachments\u2019 shapes are kept.', sim.t, 'err');
   }
-  function useAttachment(id) {
-    sim.setBuild({ ...sim.build, attachment: id });
+  function useAttachment(id, onBack) {
+    sim.setBuild(onBack ? { ...sim.build, back: id } : { ...sim.build, attachment: id, back: sim.build.back === id ? 'none' : sim.build.back });
     store.set('bioglow-build', JSON.stringify(sim.build));
     showBuild();
   }
@@ -588,11 +599,13 @@ robot.log('Done at', robot.time(), 's');
       const row = document.createElement('div'); row.className = 'row';
       const name = document.createElement('span'); name.textContent = def.name;
       const small = document.createElement('small');
-      small.textContent = (def.len ? def.len + ' cm long, ' : '') + (def.mount === 'fixed' ? 'fixed to the front' : 'on motor ' + (def.mount === 'spare' ? 'D' : 'C')) + (sim.build.attachment === def.id ? ' \u00b7 fitted now' : '');
+      const where = sim.build.attachment === def.id ? ' \u00b7 fitted on the front' : sim.build.back === def.id ? ' \u00b7 fitted on the back' : '';
+      small.textContent = (def.len ? def.len + ' cm long, ' : '') + (def.mount === 'fixed' ? 'fixed' : 'on motor ' + (def.mount === 'spare' ? 'D' : 'C') + ' on the front, D on the back') + where;
       name.appendChild(small);
       const btns = document.createElement('span'); btns.className = 'row-end';
       const btn = (text, fn, cls) => { const b = document.createElement('button'); b.textContent = text; b.onclick = fn; if (cls) b.className = cls; btns.appendChild(b); };
-      if (sim.build.attachment !== def.id) btn('Fit', () => useAttachment(def.id), 'suggested');
+      if (sim.build.attachment !== def.id) btn('Fit front', () => useAttachment(def.id), 'suggested');
+      if (sim.build.back !== def.id) btn('Fit back', () => useAttachment(def.id, true));
       btn('Change', () => maker.open(def));
       btn('Delete', () => {
         if (!confirm('Delete "' + def.name + '"? Its photos go too.')) return;
@@ -600,7 +613,9 @@ robot.log('Done at', robot.time(), 's');
         window.BioGlow.unregisterAttachment(def.id);
         savePhotoAttachments();
         fillAttachments();
-        if (sim.build.attachment === def.id) useAttachment(BUILD_DEFAULT.attachment); else showBuild();
+        if (sim.build.attachment === def.id) useAttachment(BUILD_DEFAULT.attachment);
+        else if (sim.build.back === def.id) useAttachment('none', true);
+        else showBuild();
       });
       row.append(name, btns);
       list.appendChild(row);
@@ -614,8 +629,9 @@ robot.log('Done at', robot.time(), 's');
       photoAttachments = photoAttachments.filter((d) => d.id !== def.id).concat([def]);
       savePhotoAttachments();
       fillAttachments();
-      useAttachment(def.id);
-      print('Fitted "' + def.name + '" to the robot' + (def.mount === 'fixed' ? '.' : ': turn motor ' + (def.mount === 'spare' ? 'D' : 'C') + ' in your program to move it.'), sim.t);
+      const onBack = sim.build.back === def.id; // a changed attachment stays where it was fitted; a new one goes on the front
+      useAttachment(def.id, onBack);
+      print('Fitted "' + def.name + '" to the ' + (onBack ? 'back' : 'front') + ' of the robot' + (def.mount === 'fixed' ? '.' : ': turn motor ' + (onBack || def.mount === 'spare' ? 'D' : 'C') + ' in your program to move it.'), sim.t);
     },
   }) : null;
 
@@ -936,6 +952,11 @@ robot.log('Done at', robot.time(), 's');
     } else if (ROBOT.attachment === 'pusher') {
       ctx.fillStyle = '#2b6cb0'; ctx.fillRect(-W / 2, -L / 2 - R, W, R); // pusher
     }
+    if (sim.backBoxes) { // photo attachment on the back (motor D)
+      for (const b of sim.backBoxes) { ctx.fillStyle = b.high ? 'rgba(43,108,176,.4)' : '#2b6cb0'; ctx.fillRect((b.v - b.dv / 2) * S, -(b.u + b.du / 2) * S, b.dv * S, b.du * S); }
+    } else if (ROBOT.back === 'pusher') {
+      ctx.fillStyle = '#2b6cb0'; ctx.fillRect(-W / 2, L / 2, W, ROBOT.backReach * S);
+    }
     const look = ROBOT.look && lookImage(ROBOT.look);
     if (look) { // the robot made from photos, seen from above (the photo's front is on the right)
       const k = ROBOT.look.cell * S;
@@ -1084,8 +1105,8 @@ robot.log('Done at', robot.time(), 's');
     const rrect = (x, y, w, h, rad) => (c.roundRect ? c.roundRect(x, y, w, h, rad) : c.rect(x, y, w, h));
     const radius = R.wheel.diameter / 2, ms = (w) => w * radius; // wheel rad/s -> cm/s at the tyre
     const reach = R.basket, ww = Math.max(R.wheel.width, 1.2), wid = Math.max(R.width, R.wheelBase + ww + 7);
-    const k = Math.min((P * 0.6) / (R.length + reach), (P * 0.82) / wid); // pixels per cm
-    const cx = P / 2, cy = P / 2 + (reach * k) / 2 + 10;
+    const k = Math.min((P * 0.6) / (R.length + reach + R.backReach), (P * 0.82) / wid); // pixels per cm
+    const cx = P / 2, cy = P / 2 + ((reach - R.backReach) * k) / 2 + 10;
     const at = (x, y) => [cx + x * k, cy + y * k]; // robot cm (x right, y back) -> canvas px
     const label = (x, y, text, colour, align) => { const [px, py] = at(x, y); c.fillStyle = colour || T.fg; c.textAlign = align || 'center'; c.fillText(text, px, py); };
     const arrow = (x0, y0, x1, y1, colour, width) => {
@@ -1121,8 +1142,16 @@ robot.log('Done at', robot.time(), 's');
       c.fillStyle = armOk ? T.accent : T.dim;
       for (const b of sim.attBoxes) { const [px, py] = at(b.v - b.dv / 2, -(b.u + b.du / 2)); c.globalAlpha = b.high ? 0.35 : 0.8; c.fillRect(px, py, b.dv * k, b.du * k); }
       c.globalAlpha = 1;
-    } else seg(-R.width / 2, front - reach, R.width / 2, front - reach);
-    if (!armOk) cross(0, front - reach / 2, 1.2);
+    } else if (R.attachment === 'pusher') seg(-R.width / 2, front - reach, R.width / 2, front - reach);
+    if (!armOk && R.attachment !== 'none') cross(0, front - reach / 2, 1.2);
+    // the back attachment, on motor D
+    const rear = R.length / 2, spareOk = sim.faults.spare.on;
+    if (sim.backBoxes) {
+      c.fillStyle = spareOk ? T.accent : T.dim;
+      for (const b of sim.backBoxes) { const [px, py] = at(b.v - b.dv / 2, -(b.u + b.du / 2)); c.globalAlpha = b.high ? 0.35 : 0.8; c.fillRect(px, py, b.dv * k, b.du * k); }
+      c.globalAlpha = 1;
+      if (!spareOk && R.backSwing.job) cross(0, rear + R.backReach / 2, 1.2);
+    } else if (R.back === 'pusher') { c.strokeStyle = T.accent; c.lineWidth = 3; seg(-R.width / 2, rear + R.backReach, R.width / 2, rear + R.backReach); }
 
     // wheels: the tread moves with the encoder; red when slipping, crossed out when the motor is off
     const scaleV = ((R.length + reach) * 0.42) / R.maxSpeed; // cm of arrow per cm/s
@@ -1223,7 +1252,7 @@ robot.log('Done at', robot.time(), 's');
     if (R.distanceSensor) { const d = sim.distance(); row('Distance · ' + portOf('distance'), sim.faults.distance.on ? (d >= R.eyeRange ? 'nothing in range' : f1(d) + ' cm') : 'switched off', sim.faults.distance.on ? '' : 'bad'); }
     head('Other motors');
     if (portOf('arm')) row('Attachment · ' + portOf('arm'), sim.faults.arm.on ? Math.round(r.armPos) + '°' + (R.attachment === 'pusher' ? ', pusher' : R.attachment === 'basket' || R.attachment === 'hook' ? (closed ? ', closed' : ', open') : '') : 'switched off', sim.faults.arm.on ? '' : 'bad');
-    if (portOf('spare')) row('Spare · ' + portOf('spare'), sim.faults.spare.on ? Math.round(r.sparePos) + '°' : 'switched off', sim.faults.spare.on ? '' : 'bad');
+    if (portOf('spare')) row((R.backSwing && R.backSwing.job ? 'Back attachment · ' : 'Spare · ') + portOf('spare'), sim.faults.spare.on ? Math.round(r.sparePos) + '°' : 'switched off', sim.faults.spare.on ? '' : 'bad');
     row('Holding', sim.carried.length ? sim.carried.map((i) => i.type).join(', ') : 'nothing');
     row('Battery', Math.round(sim.battery * 100) + '%');
     liveStats.innerHTML = rows.join('');

@@ -1626,6 +1626,27 @@
         swingG.add(rod([-3.2, 0, 0], [3.2, 0, 0], 0.24, L.black)); // the axle across
       } else if (ATTACHMENTS[ROBOT.attachment].custom) swingG.add(voxelMesh(ATTACHMENTS[ROBOT.attachment].custom));
     }
+    // on the back: a flat pusher, or a photo attachment on motor D's axle (ROBOT.backSwing)
+    const back = new THREE.Group(), bsw = ROBOT.backSwing, backSwingG = new THREE.Group(), bReach = ROBOT.backReach;
+    robot.add(back);
+    if (ROBOT.back === 'pusher') {
+      back.add(beam(holes(W), L.azure, 0, 0.8, Ln / 2 + bReach - 0.4), beam(holes(W), L.azure, 0, 2.4, Ln / 2 + bReach - 0.4));
+      for (const s of [-1, 1]) back.add(beam(3, L.azure, s * (W / 2 - 1.2), 1.6, Ln / 2 + bReach / 2, { ry: Math.PI / 2 }));
+    }
+    if (bsw && bsw.shape) {
+      const mount = new THREE.Group();
+      mount.position.set(0, bsw.spot.z, -bsw.spot.u);
+      mount.rotation.y = Math.PI;
+      mount.add(backSwingG); back.add(mount);
+      backSwingG.add(voxelMesh(ATTACHMENTS[ROBOT.back].custom));
+      if (bsw.job && !adb) { // motor D, its axle at the back
+        const motorD = new THREE.Group();
+        motorD.add(shadowy(new THREE.Mesh(new THREE.BoxGeometry(4.8, 2.4, 2.4), L.white)));
+        const dFace = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.3, 20), L.dbg); dFace.rotation.z = Math.PI / 2; dFace.position.x = 2.45; motorD.add(dFace);
+        motorD.position.set(-2.8, bsw.spot.z, -bsw.spot.u);
+        back.add(motorD);
+      }
+    }
 
     // cables
     if (!adb) {
@@ -1637,7 +1658,7 @@
     // a robot made from photos (Robot tab) replaces the standard parts; the attachment and the sensor
     // spots stay, and the parts left out still exist so the hub's lights keep working off screen
     if (ROBOT.look) {
-      const keep = new Set([att, gate, ...spots]);
+      const keep = new Set([att, gate, back, ...spots]);
       for (const ch of [...robot.children]) if (!keep.has(ch)) robot.remove(ch);
       robot.add(voxelMesh(ROBOT.look));
     }
@@ -1647,6 +1668,7 @@
     const pose = (r) => {
       gate.rotation.x = -rad(Math.max(0, 90 - r.armPos));
       if (sw && sw.shape) swingG.rotation.x = rad(sw.angle(sw.job === 'spare' ? r.sparePos : sw.job ? r.armPos : 0));
+      if (bsw && bsw.shape) backSwingG.rotation.x = rad(bsw.angle(bsw.job ? r.sparePos : 0));
     };
     return { robot, mCanvas, mTex, centerBtn, eyeLights, gate, pose, wheels: [robot.userData.wheelL, robot.userData.wheelR], csFace, sensorGroups, ds, hub, att, spots, matrix };
   }
